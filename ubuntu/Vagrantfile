@@ -1,0 +1,95 @@
+# # encoding: utf-8
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Box / OS
+VAGRANT_BOX = 'ubuntu/xenial64'
+
+# Memorable name for your
+VM_NAME = 'ubuntu'
+
+# VM User — 'vagrant' by default
+VM_USER = 'vagrant'
+
+# Username on your Mac
+MAC_USER = 'danyeaw'
+
+# Host folder to sync
+HOST_PATH = '/Users/' + MAC_USER + '/Projects/vagrant-dev-toga/' + VM_NAME
+
+# Where to sync to on Guest — 'vagrant' is the default user name
+GUEST_PATH = '/home/' + VM_USER + '/Projects/vagrant-dev-toga/' + VM_NAME
+
+# # VM Port — uncomment this to use NAT instead of DHCP
+# VM_PORT = 8080
+
+Vagrant.configure(2) do |config|
+
+  # Vagrant box from Hashicorp
+  config.vm.box = VAGRANT_BOX
+
+  # Actual machine name
+  config.vm.hostname = VM_NAME
+
+  # Set VM name in Virtualbox
+  config.vm.provider "virtualbox" do |v|
+    v.name = VM_NAME
+    v.memory = 2048
+    v.gui = true
+  end
+
+  #DHCP — comment this out if planning on using NAT instead
+  config.vm.network "private_network", ip: "172.28.128.10" 
+
+  # # Port forwarding — uncomment this to use NAT instead of DHCP
+  # config.vm.network "forwarded_port", guest: 80, host: VM_PORT
+
+  # Sync folder
+  config.vm.synced_folder HOST_PATH, GUEST_PATH, nfs: true
+
+  # Disable default Vagrant folder, use a unique path per project
+  config.vm.synced_folder '.', '/home/'+VM_USER+'', disabled: true
+
+  config.vm.provision "shell", inline: <<-SHELL, privileged: false
+    sudo apt-get update
+    echo "Enable GUI"
+    sudo apt-get install -y xfce4 virtualbox-guest-dkms \
+      virtualbox-guest-utils virtualbox-guest-x11 xserver-xorg-legacy
+    sudo sed -i \
+      's/allowed_users=console/allowed_users=anybody/' \
+      /etc/X11/Xwrapper.config
+    echo "Install pygobject and cairo locally"
+    sudo apt-get install -y python-gi python-gi-cairo python3-gi \
+    python3-gi-cairo gir1.2-gtk-3.0
+    echo "Install build dependencies for pygobject"
+    sudo apt-get install libgirepository1.0-dev
+    echo "Install python virtualenv and wheel"
+    sudo apt-get install -y python3-venv python3-wheel
+    echo "Install dependencies for pyenv" 
+    sudo apt-get install -y build-essential \
+    libbz2-dev libreadline-dev libssl-dev zlib1g-dev libsqlite3-dev wget \
+      curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev
+    # Install pyenv
+    echo "Install pyenv"
+    git clone https://github.com/pyenv/pyenv.git ~/.pyenv
+    echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
+    echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
+    echo -e 'if command -v pyenv 1>/dev/null 2>&1; then\n  eval "$(pyenv init -)"\nfi' >> ~/.bashrc
+    echo "Setup python 3.6.4"
+    ~/.pyenv/bin/pyenv install 3.6.4
+    # Install pipsi
+    echo "Install pipsi"
+    curl https://raw.githubusercontent.com/mitsuhiko/pipsi/master/get-pipsi.py | python3 - --src=git+https://github.com/mitsuhiko/pipsi.git\#egg=pipsi
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    echo "Install pipenv"
+    ~/.local/bin/pipsi install pew
+    ~/.local/bin/pipsi install pipenv
+    echo "Start VBoxClient"
+    sudo VBoxClient --clipboard
+    sudo VBoxClient --draganddrop
+    sudo VBoxClient --display
+    sudo VBoxClient --checkhostversion
+    sudo VBoxClient --seamless
+    echo "All set, run startx to launch your GUI"
+  SHELL
+end
